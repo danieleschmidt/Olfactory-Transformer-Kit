@@ -1,6 +1,6 @@
 """Training infrastructure for olfactory transformer models."""
 
-from typing import Dict, List, Optional, Any, Union, Callable
+from typing import Dict, List, Optional, Any, Union, Callable, Tuple
 import logging
 import time
 from pathlib import Path
