@@ -1,0 +1,324 @@
+# Docker Compose configuration for auto-scaling production deployment
+version: '3.8'
+
+services:
+  # Load balancer
+  nginx-lb:
+    image: nginx:alpine
+    container_name: olfactory-load-balancer
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx-lb.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.2'
+    networks:
+      - olfactory-network
+    depends_on:
+      - olfactory-api-1
+      - olfactory-api-2
+
+  # Multiple API instances for scaling
+  olfactory-api-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: olfactory-api-1
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+      - INSTANCE_ID=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PROMETHEUS_PORT=8001
+      - MAX_BATCH_SIZE=32
+      - WORKER_THREADS=4
+      - ENABLE_CACHING=true
+      - CACHE_BACKEND=redis
+    volumes:
+      - ./models:/app/models:ro
+      - ./logs:/app/logs
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "docker/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: '3.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    networks:
+      - olfactory-network
+
+  olfactory-api-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: olfactory-api-2
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+      - INSTANCE_ID=2
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PROMETHEUS_PORT=8002
+      - MAX_BATCH_SIZE=32
+      - WORKER_THREADS=4
+      - ENABLE_CACHING=true
+      - CACHE_BACKEND=redis
+    volumes:
+      - ./models:/app/models:ro
+      - ./logs:/app/logs
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "docker/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: '3.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    networks:
+      - olfactory-network
+
+  # Shared Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: olfactory-redis-scale
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 60
+      --timeout 300
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    networks:
+      - olfactory-network
+
+  # Auto-scaler service
+  autoscaler:
+    build:
+      context: .
+      dockerfile: Dockerfile.autoscaler
+    container_name: olfactory-autoscaler
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - MIN_INSTANCES=2
+      - MAX_INSTANCES=8
+      - SCALE_UP_THRESHOLD=80
+      - SCALE_DOWN_THRESHOLD=30
+      - COOLDOWN_PERIOD=300
+      - MONITORING_INTERVAL=30
+      - TARGET_IMAGE=olfactory-transformer:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      - olfactory-api-1
+      - olfactory-api-2
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - olfactory-network
+
+  # Monitoring stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: olfactory-prometheus-scale
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-scale.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=50GB'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    networks:
+      - olfactory-network
+
+  # Enhanced Grafana with alerting
+  grafana:
+    image: grafana/grafana:latest
+    container_name: olfactory-grafana-scale
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/alerting:/etc/grafana/provisioning/alerting:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ALERTING_ENABLED=true
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${SMTP_HOST:-localhost:587}
+      - GF_SMTP_USER=${SMTP_USER:-}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-polystat-panel
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+    networks:
+      - olfactory-network
+
+  # Log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: olfactory-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.3'
+    networks:
+      - olfactory-network
+
+  # Log collection
+  promtail:
+    image: grafana/promtail:latest
+    container_name: olfactory-promtail
+    volumes:
+      - ./logs:/var/log/app:ro
+      - ./monitoring/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    networks:
+      - olfactory-network
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: olfactory-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger collector HTTP
+    environment:
+      - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+      - SPAN_STORAGE_TYPE=memory
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - olfactory-network
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  loki_data:
+    driver: local
+
+networks:
+  olfactory-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+          gateway: 172.21.0.1
+    driver_opts:
+      com.docker.network.bridge.name: olfactory-br
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+      com.docker.network.driver.mtu: 1500

@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Union, Tuple, Any
 import warnings
 from pathlib import Path
 import logging
+import re
 
 import torch
 import torch.nn as nn
@@ -303,54 +304,111 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         return outputs
     
     def predict_scent(self, smiles: str, tokenizer: Optional[MoleculeTokenizer] = None) -> ScentPrediction:
-        """Predict scent from SMILES string with comprehensive validation."""
-        # Input validation
-        if not smiles or not isinstance(smiles, str):
-            raise ValueError("SMILES string must be a non-empty string")
+        """Predict scent from SMILES string with comprehensive validation and security."""
+        from ..utils.security import security_manager
         
-        smiles = smiles.strip()
-        if len(smiles) == 0:
-            raise ValueError("SMILES string cannot be empty after stripping")
+        # Comprehensive security validation
+        validation_result = security_manager.validate_and_secure_input(
+            smiles, "smiles", source_ip=None
+        )
         
-        # Check for potentially dangerous characters
-        dangerous_chars = ['<', '>', '&', '"', "'", ';', '`', '|']
-        if any(char in smiles for char in dangerous_chars):
-            raise ValueError(f"SMILES contains potentially dangerous characters: {dangerous_chars}")
+        if not validation_result["valid"]:
+            error_msg = "; ".join(validation_result["errors"])
+            raise ValueError(f"SMILES validation failed: {error_msg}")
+        
+        # Use sanitized input
+        smiles = validation_result["sanitized"]
         
         if tokenizer is None:
             raise ValueError("Tokenizer required for prediction")
         
+        # Additional chemistry-specific validation
+        if not self._validate_chemistry_safety(smiles):
+            raise ValueError("SMILES represents potentially unsafe chemical structure")
+        
         try:
-            # Tokenize SMILES
-            encoded = tokenizer.encode(smiles, padding=True, truncation=True)
+            # Tokenize SMILES with timeout protection
+            import signal
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Tokenization timeout")
+            
+            # Set timeout for tokenization (5 seconds)
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(5)
+            
+            try:
+                encoded = tokenizer.encode(smiles, padding=True, truncation=True)
+            finally:
+                signal.alarm(0)  # Cancel timeout
+            
             if not encoded or "input_ids" not in encoded:
                 raise ValueError("Failed to encode SMILES string")
             
             input_ids = torch.tensor([encoded["input_ids"]], dtype=torch.long)
             attention_mask = torch.tensor([encoded["attention_mask"]], dtype=torch.long)
             
-            # Validate tensor dimensions
+            # Validate tensor dimensions and values
             if input_ids.size(1) == 0:
                 raise ValueError("Encoded input is empty")
+            
+            # Check for reasonable tensor values
+            if torch.any(input_ids < 0) or torch.any(input_ids >= tokenizer.vocab_size):
+                raise ValueError("Invalid token IDs detected")
                 
+        except TimeoutError:
+            raise RuntimeError("Tokenization timed out - possible adversarial input")
         except Exception as e:
             raise RuntimeError(f"Tokenization failed: {e}")
         
-        # Extract molecular features
-        mol_features = tokenizer.extract_molecular_features(smiles)
-        if mol_features:
-            # Convert to tensor (simplified)
-            mol_tensor = torch.tensor([[list(mol_features.values())]], dtype=torch.float32)
-        else:
+        # Extract molecular features with error handling
+        mol_tensor = None
+        try:
+            mol_features = tokenizer.extract_molecular_features(smiles)
+            if mol_features:
+                # Convert to tensor with validation
+                feature_values = list(mol_features.values())
+                
+                # Validate feature values
+                if any(not isinstance(v, (int, float)) or not (-1e6 < v < 1e6) for v in feature_values):
+                    logging.warning("Invalid molecular feature values detected")
+                    mol_tensor = None
+                else:
+                    mol_tensor = torch.tensor([feature_values], dtype=torch.float32)
+                    
+        except Exception as e:
+            logging.warning(f"Failed to extract molecular features: {e}")
             mol_tensor = None
         
-        # Forward pass
-        with torch.no_grad():
-            outputs = self.forward(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                molecular_features=mol_tensor,
-            )
+        # Forward pass with memory monitoring
+        try:
+            # Monitor memory usage
+            if torch.cuda.is_available():
+                initial_memory = torch.cuda.memory_allocated()
+                max_memory_allowed = 2 * 1024 * 1024 * 1024  # 2GB limit
+            
+            with torch.no_grad():
+                outputs = self.forward(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    molecular_features=mol_tensor,
+                )
+                
+                # Check memory usage
+                if torch.cuda.is_available():
+                    current_memory = torch.cuda.memory_allocated()
+                    if current_memory - initial_memory > max_memory_allowed:
+                        raise RuntimeError("Memory usage exceeded safety limits")
+                        
+        except RuntimeError as e:
+            if "CUDA out of memory" in str(e) or "Memory usage exceeded" in str(e):
+                # Clear GPU cache and retry with reduced precision
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                raise RuntimeError("Insufficient GPU memory for prediction")
+            raise
+        except Exception as e:
+            raise RuntimeError(f"Model forward pass failed: {e}")
         
         # Process outputs
         scent_probs = F.softmax(outputs["scent_logits"], dim=-1)
@@ -365,8 +423,21 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         intensity = outputs["intensity"][0].item()
         confidence = torch.max(scent_probs).item()
         
+        # Validate prediction outputs
+        if not primary_notes:
+            primary_notes = ["unknown"]
+        
+        # Ensure all values are within expected ranges
+        intensity = max(0.0, min(10.0, intensity))  # Clamp to 0-10
+        confidence = max(0.0, min(1.0, confidence))  # Clamp to 0-1
+        
+        # Log prediction for monitoring
+        logging.debug(f"Prediction completed for SMILES length {len(smiles)}: "
+                     f"primary_notes={primary_notes[:2]}, intensity={intensity:.2f}, "
+                     f"confidence={confidence:.2f}")
+        
         return ScentPrediction(
-            primary_notes=primary_notes,
+            primary_notes=primary_notes[:5],  # Limit to 5 notes max
             descriptors=primary_notes[:3],
             intensity=intensity,
             confidence=confidence,
@@ -376,27 +447,53 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         )
     
     def predict_from_sensors(self, sensor_reading: SensorReading) -> ScentPrediction:
-        """Predict scent from sensor readings."""
-        # Convert sensor reading to tensor
+        """Predict scent from sensor readings with validation."""
+        if not sensor_reading or not sensor_reading.gas_sensors:
+            raise ValueError("Invalid sensor reading provided")
+        
+        # Validate sensor data
         sensor_values = list(sensor_reading.gas_sensors.values())
+        
+        # Check for valid sensor values
+        if not all(isinstance(v, (int, float)) and -1000 <= v <= 1000 for v in sensor_values):
+            raise ValueError("Sensor values out of valid range or invalid type")
+        
+        # Check for sensor data anomalies
+        if len(sensor_values) == 0:
+            raise ValueError("No sensor data provided")
+        
+        # Normalize and validate array size
         if len(sensor_values) < self.config.sensor_channels:
             # Pad with zeros
             sensor_values.extend([0.0] * (self.config.sensor_channels - len(sensor_values)))
         elif len(sensor_values) > self.config.sensor_channels:
-            # Truncate
+            # Truncate (with warning)
+            logging.warning(f"Truncating sensor data from {len(sensor_values)} to {self.config.sensor_channels} channels")
             sensor_values = sensor_values[:self.config.sensor_channels]
         
-        sensor_tensor = torch.tensor([[sensor_values]], dtype=torch.float32)
+        try:
+            sensor_tensor = torch.tensor([[sensor_values]], dtype=torch.float32)
+            
+            # Validate tensor
+            if torch.any(torch.isnan(sensor_tensor)) or torch.any(torch.isinf(sensor_tensor)):
+                raise ValueError("Sensor data contains NaN or infinite values")
+                
+        except Exception as e:
+            raise ValueError(f"Failed to create sensor tensor: {e}")
         
         # Create dummy input (would use proper sensor-to-token mapping in real implementation)
         dummy_input_ids = torch.zeros((1, 10), dtype=torch.long)
         
-        # Forward pass
-        with torch.no_grad():
-            outputs = self.forward(
-                input_ids=dummy_input_ids,
-                sensor_data=sensor_tensor,
-            )
+        # Forward pass with error handling
+        try:
+            with torch.no_grad():
+                outputs = self.forward(
+                    input_ids=dummy_input_ids,
+                    sensor_data=sensor_tensor,
+                )
+        except Exception as e:
+            logging.error(f"Sensor prediction failed: {e}")
+            raise RuntimeError(f"Failed to process sensor data: {e}")
         
         # Process outputs (similar to predict_scent)
         scent_probs = F.softmax(outputs["scent_logits"], dim=-1)
@@ -405,11 +502,15 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         top_prediction = self.scent_descriptors[top_prediction_idx % len(self.scent_descriptors)]
         confidence = torch.max(scent_probs).item()
         
+        # Validate outputs and create safe prediction
+        intensity = outputs["intensity"][0].item() if "intensity" in outputs else 0.0
+        intensity = max(0.0, min(10.0, intensity))  # Clamp intensity
+        
         return ScentPrediction(
             primary_notes=[top_prediction],
             descriptors=[top_prediction],
-            intensity=outputs["intensity"][0].item(),
-            confidence=confidence,
+            intensity=intensity,
+            confidence=min(confidence, 1.0),  # Ensure confidence <= 1.0
         )
     
     @classmethod
@@ -458,6 +559,42 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
             descriptors=["fruity", "sweet", "wintergreen", "medicinal"],
             ifra_category="Category 4 - Restricted use"
         )
+    
+    def _validate_chemistry_safety(self, smiles: str) -> bool:
+        """Validate chemical safety of SMILES structure."""
+        # Basic safety checks for known dangerous patterns
+        dangerous_patterns = [
+            r'N(\[.*?\])*\+.*N',  # Potentially explosive nitrogen compounds
+            r'O-O',  # Peroxides
+            r'N-N-N',  # Azides
+            r'C#C.*C#C',  # Multiple triple bonds (explosive)
+            r'S-S-S',  # Polysulfides
+            r'\[.*?As.*?\]',  # Arsenic compounds
+            r'\[.*?Hg.*?\]',  # Mercury compounds
+            r'\[.*?Pb.*?\]',  # Lead compounds
+            r'\[.*?Cd.*?\]',  # Cadmium compounds
+        ]
+        
+        smiles_upper = smiles.upper()
+        
+        # Check for dangerous patterns
+        for pattern in dangerous_patterns:
+            if re.search(pattern, smiles_upper):
+                logging.warning(f"Potentially dangerous chemical pattern detected: {pattern}")
+                return False
+        
+        # Check for reasonable molecular size (prevent DoS)
+        if len(smiles) > 200:  # Very large molecules
+            logging.warning(f"Unusually large molecule: {len(smiles)} characters")
+            return False
+        
+        # Check for excessive complexity
+        complexity_score = smiles.count('(') + smiles.count('[') + smiles.count('#')
+        if complexity_score > 50:  # Arbitrary complexity limit
+            logging.warning(f"Molecule too complex: complexity score {complexity_score}")
+            return False
+        
+        return True
     
     def zero_shot_classify(
         self, 

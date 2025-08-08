@@ -458,7 +458,8 @@ class ResourceTracker:
         while self.monitoring_active:
             try:
                 # Get resource snapshot
-                snapshot = self.resource_history.append(snapshot)
+                snapshot = self.get_resource_snapshot()
+                self.resource_history.append(snapshot)
                 
                 # Check thresholds
                 alerts = self.check_thresholds(snapshot)
