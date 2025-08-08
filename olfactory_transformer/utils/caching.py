@@ -1,13 +1,27 @@
-"""Caching systems for performance optimization."""
+"""Advanced caching systems for performance optimization and scaling."""
 
-from typing import Dict, Any, Optional, Union, Tuple, List
+from typing import Dict, Any, Optional, Union, Tuple, List, Callable
 import hashlib
 import pickle
 import time
 import logging
+import threading
 from pathlib import Path
 from dataclasses import dataclass
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from abc import ABC, abstractmethod
+
+try:
+    import redis
+    HAS_REDIS = True
+except ImportError:
+    HAS_REDIS = False
+
+try:
+    import lz4.frame
+    HAS_LZ4 = True
+except ImportError:
+    HAS_LZ4 = False
 import threading
 import json
 
