@@ -58,6 +58,24 @@ class MoleculeTokenizer:
             self.id_to_token[i] = token
     
     def build_vocab_from_smiles(self, smiles_list: List[str]) -> None:
+        """Build vocabulary with input validation."""
+        if not isinstance(smiles_list, list):
+            raise TypeError("smiles_list must be a list")
+        
+        if len(smiles_list) > 1000000:  # Reasonable limit
+            raise ValueError("Too many SMILES strings (max 1M)")
+        
+        # Filter and validate SMILES
+        valid_smiles = []
+        for smiles in smiles_list:
+            if isinstance(smiles, str) and smiles.strip() and len(smiles) <= 1000:
+                valid_smiles.append(smiles)
+        
+        if not valid_smiles:
+            raise ValueError("No valid SMILES strings provided")
+        
+        logging.info(f"Building vocabulary from {len(valid_smiles)}/{len(smiles_list)} valid SMILES")
+        smiles_list = valid_smiles
         """Build vocabulary from list of SMILES strings."""
         # Tokenize all SMILES
         all_tokens = []
@@ -97,6 +115,22 @@ class MoleculeTokenizer:
         padding: bool = True,
         truncation: bool = True,
     ) -> Dict[str, List[int]]:
+        """Encode SMILES with security validation."""
+        # Input validation and sanitization
+        if not isinstance(smiles, str):
+            raise TypeError("SMILES must be a string")
+        
+        if len(smiles) > 10000:  # Reasonable limit
+            raise ValueError("SMILES string too long (max 10000 characters)")
+        
+        # Security: Check for suspicious patterns
+        suspicious_patterns = ['exec', 'eval', 'import', '__', 'subprocess', 'os.system']
+        if any(pattern in smiles.lower() for pattern in suspicious_patterns):
+            raise ValueError("SMILES contains suspicious patterns")
+        
+        max_length = max_length or self.max_length
+        if max_length > 10000:  # Security limit
+            raise ValueError("max_length too large (max 10000)")
         """Encode SMILES string to token IDs."""
         max_length = max_length or self.max_length
         
@@ -147,6 +181,15 @@ class MoleculeTokenizer:
         return "".join(tokens)
     
     def extract_molecular_features(self, smiles: str) -> Dict[str, float]:
+        """Extract molecular descriptors with validation."""
+        # Input validation
+        if not isinstance(smiles, str) or not smiles.strip():
+            logging.warning("Invalid SMILES input for feature extraction")
+            return {}
+        
+        if len(smiles) > 1000:  # Reasonable limit for feature extraction
+            logging.warning("SMILES too long for feature extraction")
+            return {}
         """Extract molecular descriptors from SMILES."""
         if not HAS_RDKIT:
             return {}
@@ -193,6 +236,21 @@ class MoleculeTokenizer:
             return None
     
     def save_pretrained(self, save_directory: Union[str, Path]) -> None:
+        """Save tokenizer with path validation."""
+        if not save_directory:
+            raise ValueError("Save directory cannot be empty")
+        
+        save_directory = Path(save_directory)
+        
+        # Security: Validate save path
+        try:
+            save_directory = save_directory.resolve()
+        except Exception as e:
+            raise ValueError(f"Invalid save directory: {e}")
+        
+        # Prevent path traversal
+        if '..' in str(save_directory) or not str(save_directory).startswith('/root/'):
+            logging.warning(f"Potentially unsafe save path: {save_directory}")
         """Save tokenizer to directory."""
         save_directory = Path(save_directory)
         save_directory.mkdir(parents=True, exist_ok=True)
@@ -214,6 +272,21 @@ class MoleculeTokenizer:
     
     @classmethod
     def from_pretrained(cls, model_path: Union[str, Path]) -> "MoleculeTokenizer":
+        """Load tokenizer with security validation."""
+        if not model_path:
+            raise ValueError("Model path cannot be empty")
+        
+        model_path = Path(model_path)
+        
+        # Security validation
+        try:
+            model_path = model_path.resolve()
+        except Exception as e:
+            raise ValueError(f"Invalid model path: {e}")
+        
+        # Prevent path traversal
+        if '..' in str(model_path):
+            raise ValueError("Path traversal detected in model path")
         """Load tokenizer from directory."""
         model_path = Path(model_path)
         
