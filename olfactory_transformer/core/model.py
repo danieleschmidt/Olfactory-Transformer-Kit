@@ -303,14 +303,38 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         return outputs
     
     def predict_scent(self, smiles: str, tokenizer: Optional[MoleculeTokenizer] = None) -> ScentPrediction:
-        """Predict scent from SMILES string."""
+        """Predict scent from SMILES string with comprehensive validation."""
+        # Input validation
+        if not smiles or not isinstance(smiles, str):
+            raise ValueError("SMILES string must be a non-empty string")
+        
+        smiles = smiles.strip()
+        if len(smiles) == 0:
+            raise ValueError("SMILES string cannot be empty after stripping")
+        
+        # Check for potentially dangerous characters
+        dangerous_chars = ['<', '>', '&', '"', "'", ';', '`', '|']
+        if any(char in smiles for char in dangerous_chars):
+            raise ValueError(f"SMILES contains potentially dangerous characters: {dangerous_chars}")
+        
         if tokenizer is None:
             raise ValueError("Tokenizer required for prediction")
         
-        # Tokenize SMILES
-        encoded = tokenizer.encode(smiles, padding=True, truncation=True)
-        input_ids = torch.tensor([encoded["input_ids"]], dtype=torch.long)
-        attention_mask = torch.tensor([encoded["attention_mask"]], dtype=torch.long)
+        try:
+            # Tokenize SMILES
+            encoded = tokenizer.encode(smiles, padding=True, truncation=True)
+            if not encoded or "input_ids" not in encoded:
+                raise ValueError("Failed to encode SMILES string")
+            
+            input_ids = torch.tensor([encoded["input_ids"]], dtype=torch.long)
+            attention_mask = torch.tensor([encoded["attention_mask"]], dtype=torch.long)
+            
+            # Validate tensor dimensions
+            if input_ids.size(1) == 0:
+                raise ValueError("Encoded input is empty")
+                
+        except Exception as e:
+            raise RuntimeError(f"Tokenization failed: {e}")
         
         # Extract molecular features
         mol_features = tokenizer.extract_molecular_features(smiles)
