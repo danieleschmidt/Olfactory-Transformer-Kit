@@ -25,8 +25,8 @@ try:
 except ImportError:
     HAS_MULTIPROCESSING = False
 
-from ..core.model import OlfactoryTransformer
-from ..training.trainer import OlfactoryDataset, TrainingArguments
+# from ..core.model import OlfactoryTransformer  # Import at runtime to avoid circular import
+# from ..training.trainer import OlfactoryDataset, TrainingArguments  # Import at runtime to avoid circular import
 
 
 @dataclass
@@ -49,7 +49,7 @@ class DistributedTraining:
     
     def __init__(
         self,
-        model: OlfactoryTransformer,
+        model,  # OlfactoryTransformer - avoid type hint for circular import
         config: Optional[DistributedConfig] = None
     ):
         self.model = model
@@ -121,7 +121,7 @@ class DistributedTraining:
     
     def create_distributed_dataloader(
         self,
-        dataset: OlfactoryDataset,
+        dataset,  # OlfactoryDataset - avoid type hint for circular import  
         batch_size: int,
         shuffle: bool = True
     ) -> DataLoader:
@@ -250,13 +250,15 @@ class FederatedOlfactory:
     
     def __init__(
         self,
-        base_model: Union[str, OlfactoryTransformer],
+        base_model: Union[str, Any],  # str or OlfactoryTransformer - avoid type hint for circular import
         aggregation: str = "fedavg",
         min_participants: int = 3,
         max_participants: int = 10,
         rounds: int = 10
     ):
         if isinstance(base_model, str):
+            # Import at runtime to avoid circular import
+            from ..core.model import OlfactoryTransformer
             self.global_model = OlfactoryTransformer.from_pretrained(base_model)
         else:
             self.global_model = base_model
@@ -504,7 +506,7 @@ class FederatedOlfactory:
             metadata=update.metadata
         )
     
-    def get_global_model(self) -> OlfactoryTransformer:
+    def get_global_model(self):  # -> OlfactoryTransformer - avoid type hint for circular import
         """Get current global model."""
         return self.global_model
     
@@ -536,7 +538,7 @@ class FederatedLocalTrainer:
     def __init__(
         self,
         participant_id: str,
-        model: OlfactoryTransformer,
+        model,  # OlfactoryTransformer - avoid type hint for circular import
         federated_coordinator: FederatedOlfactory,
     ):
         self.participant_id = participant_id
@@ -549,7 +551,7 @@ class FederatedLocalTrainer:
         
     def train_round(
         self,
-        local_dataset: OlfactoryDataset,
+        local_dataset,  # OlfactoryDataset - avoid type hint for circular import
         local_epochs: int = 5,
         learning_rate: float = 1e-4,
         batch_size: int = 32

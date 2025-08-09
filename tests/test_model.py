@@ -24,7 +24,7 @@ class TestOlfactoryTransformer:
             intermediate_size=128,
             max_position_embeddings=128,
             sensor_channels=16,
-            molecular_feature_dim=32,
+            molecular_features=32,
         )
     
     @pytest.fixture

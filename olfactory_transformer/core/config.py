@@ -28,6 +28,12 @@ class OlfactoryConfig:
     intensity_levels: int = 10
     similarity_dim: int = 256
     
+    def __post_init__(self):
+        """Post-initialization processing."""
+        # Ensure scent classes doesn't exceed available descriptors
+        if hasattr(self, '_scent_descriptors_count'):
+            self.num_scent_classes = min(self.num_scent_classes, self._scent_descriptors_count)
+    
     # Sensor fusion
     sensor_channels: int = 64
     temporal_window: int = 100
