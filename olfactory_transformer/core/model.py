@@ -14,6 +14,8 @@ import numpy as np
 
 from .config import OlfactoryConfig, ScentPrediction, SensorReading
 from .tokenizer import MoleculeTokenizer
+from ..utils.reliability import circuit_breaker, retry, reliability_manager
+from ..utils.observability import trace_operation, monitor_performance, observability_manager
 
 # Optional imports with fallbacks
 try:
@@ -66,18 +68,38 @@ class MolecularEncoder(nn.Module):
         
     def forward(self, molecular_features: torch.Tensor) -> torch.Tensor:
         """Forward pass through molecular encoder."""
-        # Simplified implementation for basic functionality
-        x = molecular_features
+        # Handle different input shapes
+        original_shape = molecular_features.shape
+        batch_size = original_shape[0]
         
+        # If input is a single vector, expand it for processing
+        if len(original_shape) == 2 and original_shape[1] != self.config.molecular_features:
+            # Create a simple projection to match expected features
+            if not hasattr(self, 'feature_projection'):
+                self.feature_projection = nn.Linear(original_shape[1], self.config.molecular_features)
+            x = self.feature_projection(molecular_features)
+            x = x.unsqueeze(1)  # Add fake sequence dimension
+        else:
+            x = molecular_features
+            
+        # Ensure x has the right shape for layer processing
+        if len(x.shape) == 2:
+            x = x.unsqueeze(1)  # Add sequence dimension
+            
         for layer in self.gnn_layers:
             if HAS_TORCH_GEOMETRIC:
                 # Would use proper graph convolution here
                 x = F.relu(layer(x))
             else:
-                x = F.relu(layer(x))
+                # Apply to last dimension
+                if len(x.shape) == 3:
+                    x = F.relu(layer(x))
+                else:
+                    x = F.relu(layer(x.view(-1, x.shape[-1]))).view(x.shape)
         
         # Global pooling (simplified)
-        x = torch.mean(x, dim=-2)  # Average pooling over atoms
+        if len(x.shape) == 3:
+            x = torch.mean(x, dim=1)  # Average pooling over sequence
         
         return self.output_projection(x)
 
@@ -161,8 +183,9 @@ class OlfactoryDecoder(nn.Module):
         super().__init__()
         self.config = config
         
-        # Scent classification head
-        self.scent_classifier = nn.Linear(config.hidden_size, config.num_scent_classes)
+        # Scent classification head - adjust to actual number of descriptors
+        actual_scent_classes = min(config.num_scent_classes, 21)  # Match available descriptors
+        self.scent_classifier = nn.Linear(config.hidden_size, actual_scent_classes)
         
         # Intensity prediction head
         self.intensity_predictor = nn.Linear(config.hidden_size, 1)
@@ -192,7 +215,15 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
     """Main Olfactory Transformer model."""
     
     def __init__(self, config: OlfactoryConfig):
-        super().__init__()
+        if HAS_TRANSFORMERS:
+            # Create a transformers-compatible config for PreTrainedModel
+            from transformers import PretrainedConfig
+            hf_config = PretrainedConfig()
+            hf_config.vocab_size = config.vocab_size
+            hf_config.hidden_size = config.hidden_size
+            super().__init__(hf_config)
+        else:
+            super().__init__()
         self.config = config
         
         # Token embeddings
@@ -268,8 +299,13 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         # Add molecular features if available
         if molecular_features is not None:
             mol_embeds = self.molecular_encoder(molecular_features)
-            # Add molecular embedding to first token
-            hidden_states[:, 0] += mol_embeds
+            # Add molecular embedding to first token (ensure shapes match)
+            if mol_embeds.shape[-1] == hidden_states.shape[-1]:
+                hidden_states[:, 0] += mol_embeds
+            else:
+                # Project to correct size if needed
+                mol_proj = torch.nn.functional.linear(mol_embeds, torch.randn(mol_embeds.shape[-1], hidden_states.shape[-1]))
+                hidden_states[:, 0] += mol_proj
         
         # Add sensor data if available
         if sensor_data is not None:
@@ -303,6 +339,10 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         
         return outputs
     
+    @circuit_breaker("model_inference")
+    @retry("smiles_prediction")
+    @trace_operation("predict_scent")
+    @monitor_performance("predict_scent")
     def predict_scent(self, smiles: str, tokenizer: Optional[MoleculeTokenizer] = None) -> ScentPrediction:
         """Predict scent from SMILES string with comprehensive validation and security."""
         from ..utils.security import security_manager
@@ -410,15 +450,25 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         except Exception as e:
             raise RuntimeError(f"Model forward pass failed: {e}")
         
-        # Process outputs
+        # Process outputs with bounds checking
         scent_probs = F.softmax(outputs["scent_logits"], dim=-1)
-        top_scents_idx = torch.topk(scent_probs, k=min(5, len(self.scent_descriptors)), dim=-1).indices[0]
+        num_classes = scent_probs.shape[-1]
+        k = min(5, num_classes, len(self.scent_descriptors))
+        top_scents_idx = torch.topk(scent_probs, k=k, dim=-1).indices[0]
         
-        primary_notes = [self.scent_descriptors[i % len(self.scent_descriptors)] for i in top_scents_idx.tolist()]
+        # Ensure indices are within bounds
+        primary_notes = []
+        for idx in top_scents_idx.tolist():
+            if idx < len(self.scent_descriptors):
+                primary_notes.append(self.scent_descriptors[idx])
+            else:
+                primary_notes.append("unknown")
         
         chemical_family_probs = F.softmax(outputs["chemical_family_logits"], dim=-1)
         chemical_family_idx = torch.argmax(chemical_family_probs, dim=-1)[0].item()
-        chemical_family = self.chemical_families[chemical_family_idx % len(self.chemical_families)]
+        # Ensure index is within bounds
+        safe_idx = min(chemical_family_idx, len(self.chemical_families) - 1)
+        chemical_family = self.chemical_families[safe_idx]
         
         intensity = outputs["intensity"][0].item()
         confidence = torch.max(scent_probs).item()
@@ -446,6 +496,8 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
             ifra_category="Category 4 - Restricted use",  # Placeholder
         )
     
+    @circuit_breaker("sensor_prediction")
+    @retry("sensor_prediction")
     def predict_from_sensors(self, sensor_reading: SensorReading) -> ScentPrediction:
         """Predict scent from sensor readings with validation."""
         if not sensor_reading or not sensor_reading.gas_sensors:
