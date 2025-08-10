@@ -289,8 +289,10 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
         # Token embeddings
         token_embeds = self.embeddings(input_ids)
         
-        # Position embeddings
+        # Position embeddings (ensure within bounds)
         position_ids = torch.arange(seq_len, device=input_ids.device).unsqueeze(0).expand(batch_size, -1)
+        # Clamp position IDs to valid range
+        position_ids = torch.clamp(position_ids, 0, self.config.max_position_embeddings - 1)
         position_embeds = self.position_embeddings(position_ids)
         
         # Combine embeddings
@@ -367,20 +369,8 @@ class OlfactoryTransformer(PreTrainedModel if HAS_TRANSFORMERS else nn.Module):
             raise ValueError("SMILES represents potentially unsafe chemical structure")
         
         try:
-            # Tokenize SMILES with timeout protection
-            import signal
-            
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Tokenization timeout")
-            
-            # Set timeout for tokenization (5 seconds)
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(5)
-            
-            try:
-                encoded = tokenizer.encode(smiles, padding=True, truncation=True)
-            finally:
-                signal.alarm(0)  # Cancel timeout
+            # Tokenize SMILES (simplified for thread safety)
+            encoded = tokenizer.encode(smiles, padding=True, truncation=True)
             
             if not encoded or "input_ids" not in encoded:
                 raise ValueError("Failed to encode SMILES string")
