@@ -1,17 +1,29 @@
 """Utility modules for optimization and scaling."""
 
-# Import utility modules - avoiding circular imports by lazy loading
-# from .caching import ModelCache, PredictionCache  # Loaded on-demand
-# from .optimization import ModelOptimizer, InferenceAccelerator  # Loaded on-demand  
-from .distributed import DistributedTraining, FederatedOlfactory
-from .monitoring import PerformanceMonitor, ResourceTracker
+# Import utility modules with conditional imports for torch dependencies
+try:
+    from .distributed import DistributedTraining, FederatedOlfactory
+    _HAS_DISTRIBUTED = True
+except ImportError:
+    DistributedTraining = None
+    FederatedOlfactory = None
+    _HAS_DISTRIBUTED = False
 
-__all__ = [
-    "DistributedTraining", 
-    "FederatedOlfactory",
-    "PerformanceMonitor",
-    "ResourceTracker",
-]
+try:
+    from .monitoring import PerformanceMonitor, ResourceTracker
+    _HAS_MONITORING = True
+except ImportError:
+    PerformanceMonitor = None
+    ResourceTracker = None
+    _HAS_MONITORING = False
+
+__all__ = []
+
+if _HAS_DISTRIBUTED:
+    __all__.extend(["DistributedTraining", "FederatedOlfactory"])
+
+if _HAS_MONITORING:
+    __all__.extend(["PerformanceMonitor", "ResourceTracker"])
 
 # Lazy loading functions to avoid circular imports
 def get_model_cache():

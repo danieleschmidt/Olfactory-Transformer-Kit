@@ -1,0 +1,39 @@
+{
+  "deployment": {
+    "environment": "production",
+    "python_version": "3.12",
+    "dependencies": {
+      "required": [
+        "torch>=2.0.0",
+        "numpy>=1.21.0",
+        "pandas>=1.3.0",
+        "scikit-learn>=1.0.0"
+      ],
+      "optional": [
+        "rdkit>=2022.9.1",
+        "pyserial>=3.5",
+        "psutil>=5.8.0"
+      ]
+    },
+    "resources": {
+      "memory_mb": 2048,
+      "cpu_cores": 2,
+      "storage_gb": 10
+    },
+    "scaling": {
+      "max_workers": 8,
+      "batch_size": 32,
+      "cache_size": 1000
+    },
+    "monitoring": {
+      "health_check_endpoint": "/health",
+      "metrics_endpoint": "/metrics",
+      "log_level": "INFO"
+    },
+    "security": {
+      "input_validation": true,
+      "rate_limiting": true,
+      "sanitization": true
+    }
+  }
+}
