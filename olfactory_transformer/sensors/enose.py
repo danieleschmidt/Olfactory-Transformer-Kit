@@ -25,7 +25,12 @@ except ImportError:
     HAS_SMBUS = False
     logging.warning("smbus2 not available. I2C sensor support disabled.")
 
-import numpy as np
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
 from ..core.config import SensorReading
 
 
@@ -141,6 +146,9 @@ class ENoseInterface:
             # Generate mock data
             gas_sensors = self._generate_mock_reading()
         
+        # Validate and sanitize sensor readings
+        gas_sensors = self._validate_sensor_readings(gas_sensors)
+        
         return SensorReading(
             timestamp=timestamp,
             gas_sensors=gas_sensors,
@@ -152,10 +160,39 @@ class ENoseInterface:
         readings = {}
         for sensor_name in self.sensors:
             # Generate realistic sensor values with some noise
-            base_value = np.random.normal(2.5, 0.5)  # Typical gas sensor voltage
+            if HAS_NUMPY:
+                base_value = np.random.normal(2.5, 0.5)  # Typical gas sensor voltage
+            else:
+                import random
+                base_value = random.normalvariate(2.5, 0.5)
             readings[sensor_name] = max(0.0, base_value)
         
         return readings
+    
+    def _validate_sensor_readings(self, readings: Dict[str, float]) -> Dict[str, float]:
+        """Validate and sanitize sensor readings to prevent corrupted data."""
+        validated = {}
+        
+        for sensor_name, value in readings.items():
+            # Check for valid numeric value
+            if not isinstance(value, (int, float)):
+                logging.warning(f"Invalid sensor value type for {sensor_name}: {type(value)}")
+                value = 0.0
+            
+            # Check for NaN or infinite values
+            if isinstance(value, float):
+                if value != value:  # NaN check
+                    logging.warning(f"NaN value detected for sensor {sensor_name}")
+                    value = 0.0
+                elif abs(value) == float('inf'):
+                    logging.warning(f"Infinite value detected for sensor {sensor_name}")
+                    value = 5.0  # Safe fallback value
+            
+            # Clamp to reasonable sensor ranges (0-10V typical)
+            value = max(0.0, min(10.0, float(value)))
+            validated[sensor_name] = value
+        
+        return validated
     
     def start_streaming(self) -> None:
         """Start continuous sensor streaming."""
@@ -255,7 +292,10 @@ class ENoseInterface:
                 mean_response = {}
                 for sensor in self.sensors:
                     values = [r.get(sensor, 0.0) for r in readings]
-                    mean_response[sensor] = np.mean(values)
+                    if HAS_NUMPY:
+                        mean_response[sensor] = np.mean(values)
+                    else:
+                        mean_response[sensor] = sum(values) / len(values) if values else 0.0
                 
                 compound_data[concentration] = mean_response
             
@@ -334,7 +374,11 @@ class ENoseArray:
         """Read spectrometer data (placeholder)."""
         if self.spectrometer:
             # In real implementation, would read from AS7265x or similar
-            return np.random.random(18).tolist()  # 18 spectral channels
+            if HAS_NUMPY:
+                return np.random.random(18).tolist()  # 18 spectral channels
+            else:
+                import random
+                return [random.random() for _ in range(18)]  # 18 spectral channels
         return None
 
 
@@ -383,7 +427,11 @@ class OlfactoryQualityControl:
                 self.recommendation = recommendation
         
         # Calculate deviation from reference
-        deviation = np.random.uniform(0.05, 0.25)  # Mock deviation
+        if HAS_NUMPY:
+            deviation = np.random.uniform(0.05, 0.25)  # Mock deviation
+        else:
+            import random
+            deviation = random.uniform(0.05, 0.25)  # Mock deviation
         
         outlier_notes = []
         if deviation > self.deviation_threshold:

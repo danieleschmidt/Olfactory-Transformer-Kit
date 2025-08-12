@@ -15,7 +15,15 @@ except ImportError:
     HAS_RDKIT = False
     logging.warning("RDKit not available. Some molecular features will be disabled.")
 
-import numpy as np
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+    # Create dummy numpy for type annotations
+    class np:
+        ndarray = object
+
 from .config import OlfactoryConfig
 
 
@@ -72,7 +80,9 @@ class MoleculeTokenizer:
                 valid_smiles.append(smiles)
         
         if not valid_smiles:
-            raise ValueError("No valid SMILES strings provided")
+            logging.warning("No valid SMILES strings provided - using minimal vocabulary")
+            # Keep only special tokens for minimal vocabulary
+            return
         
         logging.info(f"Building vocabulary from {len(valid_smiles)}/{len(smiles_list)} valid SMILES")
         smiles_list = valid_smiles
@@ -229,7 +239,10 @@ class MoleculeTokenizer:
                 return None
             
             fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=n_bits)
-            return np.array(fp)
+            if HAS_NUMPY:
+                return np.array(fp)
+            else:
+                return list(fp)
             
         except Exception as e:
             logging.warning(f"Failed to generate fingerprint for {smiles}: {e}")
