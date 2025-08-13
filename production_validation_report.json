@@ -1,5 +1,5 @@
 {
-  "timestamp": 1754960286.793629,
+  "timestamp": 1755094128.6254613,
   "checks": {
     "code_structure": "PASS",
     "imports": "PASS",
@@ -19,5 +19,5 @@
   ],
   "recommendations": [],
   "torch_available": true,
-  "throughput_ops_sec": 115960.85153442078
+  "throughput_ops_sec": 138976.2756792578
 }
