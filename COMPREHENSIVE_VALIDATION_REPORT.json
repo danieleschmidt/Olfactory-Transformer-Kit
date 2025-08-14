@@ -1,0 +1,77 @@
+{
+  "validation_timestamp": "2025-08-14T23:18:35.851758",
+  "overall_status": "FAILED",
+  "test_results": {
+    "Basic Functionality Tests": {
+      "passed": true,
+      "output_length": 1125,
+      "has_output": true
+    },
+    "Robustness & Error Handling": {
+      "passed": true,
+      "output_length": 1913,
+      "has_output": true
+    },
+    "Performance Benchmarks": {
+      "passed": true,
+      "output_length": 2160,
+      "has_output": true
+    },
+    "Production Readiness": {
+      "passed": true,
+      "output_length": 1220,
+      "has_output": true
+    }
+  },
+  "code_quality": {
+    "passed": true,
+    "metrics": {
+      "total_files": 157,
+      "python_files": 48,
+      "total_lines": 18873,
+      "documentation_coverage": 17.45632138177032,
+      "complexity_score": 0
+    }
+  },
+  "security_analysis": {
+    "passed": false,
+    "analysis": {
+      "security_score": 35,
+      "security_features": [
+        "Security modules present"
+      ],
+      "security_issues": [
+        "benchmark_performance.py: Dynamic code evaluation",
+        "validate_production_readiness.py: Direct code execution",
+        "basic_usage.py: Dynamic code evaluation",
+        "inverse.py: Dynamic code evaluation",
+        "performance_optimization.py: Dynamic code evaluation",
+        "caching.py: Unsafe deserialization",
+        "optimization.py: Dynamic code evaluation"
+      ]
+    }
+  },
+  "research_validation": {
+    "passed": true,
+    "analysis": {
+      "research_score": 75,
+      "research_components": {
+        "novel_algorithms": true,
+        "experimental_framework": true,
+        "comparative_studies": true,
+        "autonomous_validation": true,
+        "benchmarking": false
+      },
+      "scaling_components": 3
+    }
+  },
+  "summary": {
+    "total_tests": 4,
+    "passed_tests": 4,
+    "overall_score": 55.5,
+    "readiness_level": "DEVELOPMENT"
+  },
+  "recommendations": [
+    "Address security vulnerabilities"
+  ]
+}
