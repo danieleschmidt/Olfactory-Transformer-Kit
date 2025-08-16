@@ -1,0 +1,61 @@
+[package]
+name = "olfactory-transformer"
+version = "1.0.0"
+edition = "2021"
+description = "Rust SDK for Olfactory Transformer API - High-performance molecular scent prediction"
+license = "Apache-2.0"
+authors = ["Terragon Labs <info@terragonlabs.com>"]
+repository = "https://github.com/danieleschmidt/olfactory-transformer-kit"
+homepage = "https://olfactory-transformer.readthedocs.io"
+keywords = ["olfactory", "scent", "prediction", "ai", "molecular"]
+categories = ["api-bindings", "science", "web-programming::http-client"]
+readme = "README.md"
+
+[dependencies]
+# HTTP client and async runtime
+reqwest = { version = "0.11", features = ["json", "stream"] }
+tokio = { version = "1.0", features = ["full"] }
+tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+url = "2.4"
+futures-util = "0.3"
+
+# Logging
+log = "0.4"
+env_logger = "0.10"
+
+# Rate limiting
+governor = "0.6"
+nonzero_ext = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockito = "1.2"
+
+[features]
+default = ["native-tls"]
+native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
+rustls = ["reqwest/rustls-tls", "tokio-tungstenite/rustls-tls-native-roots"]
+
+[[example]]
+name = "basic_prediction"
+path = "examples/basic_prediction.rs"
+
+[[example]]
+name = "batch_processing"
+path = "examples/batch_processing.rs"
+
+[[example]]
+name = "streaming"
+path = "examples/streaming.rs"
