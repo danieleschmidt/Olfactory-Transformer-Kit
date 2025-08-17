@@ -91,6 +91,8 @@ class ScentPrediction:
     similar_perfumes: List[str] = field(default_factory=list)
     chemical_family: str = "unknown"
     ifra_category: str = "unclassified"
+    safety_warnings: List[str] = field(default_factory=list)
+    detection_method: str = "molecular_analysis"
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert prediction to dictionary."""

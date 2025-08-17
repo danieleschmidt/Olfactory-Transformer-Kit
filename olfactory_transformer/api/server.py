@@ -8,13 +8,24 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 import json
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import uvicorn
-from pydantic import BaseModel, Field
+try:
+    from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.middleware.gzip import GZipMiddleware
+    from fastapi.responses import JSONResponse, StreamingResponse
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    import uvicorn
+    from pydantic import BaseModel, Field
+    _HAS_FASTAPI = True
+except ImportError:
+    _HAS_FASTAPI = False
+    # Graceful degradation for missing dependencies
+    logging.warning("FastAPI not available. API server functionality disabled.")
+    class FastAPI:
+        def __init__(self, *args, **kwargs): pass
+    class HTTPException(Exception): pass
+    class BaseModel: pass
+    class Field: pass
 
 from ..core.model import OlfactoryTransformer
 from ..core.tokenizer import MoleculeTokenizer
