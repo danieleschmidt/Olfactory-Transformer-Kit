@@ -6,10 +6,27 @@ from pathlib import Path
 import logging
 import re
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn import CrossEntropyLoss, MSELoss
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.nn import CrossEntropyLoss, MSELoss
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
+    logging.warning("PyTorch not available. Model functionality will be limited.")
+    # Mock classes for graceful degradation
+    class nn:
+        class Module: pass
+        class ModuleList: pass
+        class Linear: pass
+        class Embedding: pass
+        class LayerNorm: pass
+        class Dropout: pass
+        class TransformerEncoder: pass
+        class TransformerEncoderLayer: pass
+    torch = None
+
 import numpy as np
 
 from .config import OlfactoryConfig, ScentPrediction, SensorReading
