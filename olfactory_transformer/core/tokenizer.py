@@ -25,6 +25,7 @@ except ImportError:
         ndarray = object
 
 from .config import OlfactoryConfig
+from ..utils.security_simple import SecurityValidator
 
 
 class MoleculeTokenizer:
@@ -38,6 +39,9 @@ class MoleculeTokenizer:
     ):
         self.vocab_size = vocab_size
         self.max_length = max_length
+        
+        # Security validator
+        self.security_validator = SecurityValidator()
         
         # Special tokens
         default_special_tokens = {
@@ -133,10 +137,9 @@ class MoleculeTokenizer:
         if len(smiles) > 10000:  # Reasonable limit
             raise ValueError("SMILES string too long (max 10000 characters)")
         
-        # Security: Check for suspicious patterns
-        suspicious_patterns = ['exec', 'eval', 'import', '__', 'subprocess', 'os.system']
-        if any(pattern in smiles.lower() for pattern in suspicious_patterns):
-            raise ValueError("SMILES contains suspicious patterns")
+        # Enhanced security validation
+        if not self.security_validator.validate_smiles(smiles):
+            raise ValueError("SMILES contains dangerous patterns or invalid format")
         
         max_length = max_length or self.max_length
         if max_length > 10000:  # Security limit

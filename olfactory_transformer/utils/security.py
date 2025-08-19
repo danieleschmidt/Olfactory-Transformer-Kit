@@ -1,17 +1,206 @@
-"""Security utilities for the Olfactory Transformer system."""
+"""Security utilities and input validation for Olfactory Transformer."""
 
 import re
 import logging
+from typing import Any, List, Dict, Optional, Union
 import hashlib
-import secrets
+import hmac
+import base64
 import time
-from typing import List, Dict, Any, Optional, Union
 from pathlib import Path
-from dataclasses import dataclass
-import threading
 from collections import defaultdict, deque
 
-# Optional cryptographic imports
+logger = logging.getLogger(__name__)
+
+
+class SecurityValidator:
+    """Comprehensive security validation and input sanitization."""
+    
+    # Dangerous patterns to detect and block
+    DANGEROUS_PATTERNS = [
+        r'exec\s*\(',
+        r'eval\s*\(',
+        r'__import__\s*\(',
+        r'open\s*\(',
+        r'file\s*\(',
+        r'input\s*\(',
+        r'raw_input\s*\(',
+        r'compile\s*\(',
+        r'globals\s*\(',
+        r'locals\s*\(',
+        r'vars\s*\(',
+        r'dir\s*\(',
+        r'hasattr\s*\(',
+        r'getattr\s*\(',
+        r'setattr\s*\(',
+        r'delattr\s*\(',
+        r'\.\./',  # Path traversal
+        r'\.\.',   # Path traversal
+        r'[;&|`]',  # Command injection
+        r'<script',  # XSS
+        r'javascript:',  # XSS
+        r'vbscript:',   # XSS
+        r'data:',       # Data URL injection
+        r'DROP\s+TABLE',  # SQL injection
+        r'UNION\s+SELECT', # SQL injection
+        r'INSERT\s+INTO',  # SQL injection
+        r'DELETE\s+FROM',  # SQL injection
+        r'UPDATE\s+SET',   # SQL injection
+    ]
+    
+    def __init__(self):
+        self.compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.DANGEROUS_PATTERNS]
+        
+    def validate_smiles(self, smiles: str) -> bool:
+        """Validate SMILES string for security and format."""
+        if not isinstance(smiles, str):
+            logger.warning(f"Invalid SMILES type: {type(smiles)}")
+            return False
+            
+        # Length limits
+        if len(smiles) > 1000:
+            logger.warning(f"SMILES too long: {len(smiles)} characters")
+            return False
+            
+        if len(smiles.strip()) == 0:
+            logger.warning("Empty SMILES string")
+            return False
+            
+        # Check for dangerous patterns
+        for pattern in self.compiled_patterns:
+            if pattern.search(smiles):
+                logger.warning(f"Dangerous pattern detected in SMILES: {smiles[:50]}...")
+                return False
+                
+        # Valid SMILES characters (comprehensive set)
+        valid_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+                         '()[]{}#=-+/.\\:@*$%')
+        
+        for char in smiles:
+            if char not in valid_chars:
+                logger.warning(f"Invalid character in SMILES: {char}")
+                return False
+                
+        return True
+        
+    def sanitize_input(self, text: str) -> str:
+        """Sanitize input text by removing dangerous patterns."""
+        if not isinstance(text, str):
+            return ""
+            
+        sanitized = text
+        
+        # Remove dangerous patterns
+        for pattern in self.compiled_patterns:
+            sanitized = pattern.sub('', sanitized)
+            
+        # Limit length
+        if len(sanitized) > 1000:
+            sanitized = sanitized[:1000]
+            
+        return sanitized.strip()
+        
+    def validate_file_path(self, file_path: str) -> bool:
+        """Validate file path for security."""
+        if not isinstance(file_path, str):
+            return False
+            
+        # Check for path traversal
+        if '..' in file_path or '/etc/' in file_path or '~' in file_path:
+            logger.warning(f"Suspicious file path: {file_path}")
+            return False
+            
+        # Must be relative path or in allowed directories
+        path = Path(file_path)
+        try:
+            path.resolve()
+        except Exception:
+            logger.warning(f"Invalid file path: {file_path}")
+            return False
+            
+        return True
+
+
+class SecureTokenizer:
+    """Security-enhanced tokenizer wrapper."""
+    
+    def __init__(self, base_tokenizer):
+        self.base_tokenizer = base_tokenizer
+        self.validator = SecurityValidator()
+        
+    def encode(self, text: str, **kwargs) -> Dict[str, Any]:
+        """Secure encoding with validation."""
+        # Validate input
+        if not self.validator.validate_smiles(text):
+            raise ValueError(f"Invalid or dangerous input: {text[:50]}...")
+            
+        # Sanitize
+        sanitized_text = self.validator.sanitize_input(text)
+        
+        # Call base tokenizer
+        return self.base_tokenizer.encode(sanitized_text, **kwargs)
+        
+    def decode(self, token_ids: List[int], **kwargs) -> str:
+        """Secure decoding."""
+        result = self.base_tokenizer.decode(token_ids, **kwargs)
+        
+        # Validate output
+        if not self.validator.validate_smiles(result):
+            logger.warning("Decoded output failed validation")
+            return self.validator.sanitize_input(result)
+            
+        return result
+
+
+class APISecurityManager:
+    """API endpoint security manager."""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key
+        self.validator = SecurityValidator()
+        self.rate_limits = {}
+        
+    def validate_api_request(self, request_data: Dict[str, Any]) -> bool:
+        """Validate API request data."""
+        # Check required fields
+        if 'smiles' not in request_data:
+            return False
+            
+        # Validate SMILES
+        smiles = request_data['smiles']
+        if not self.validator.validate_smiles(smiles):
+            return False
+            
+        return True
+        
+    def check_rate_limit(self, client_id: str, max_requests: int = 100, window_minutes: int = 60) -> bool:
+        """Check rate limiting for client."""
+        import time
+        
+        current_time = time.time()
+        window_start = current_time - (window_minutes * 60)
+        
+        if client_id not in self.rate_limits:
+            self.rate_limits[client_id] = []
+            
+        # Clean old requests
+        self.rate_limits[client_id] = [
+            req_time for req_time in self.rate_limits[client_id] 
+            if req_time > window_start
+        ]
+        
+        # Check limit
+        if len(self.rate_limits[client_id]) >= max_requests:
+            return False
+            
+        # Add current request
+        self.rate_limits[client_id].append(current_time)
+        return True
+
+
+# Global security instance
+security_validator = SecurityValidator()
+api_security = APISecurityManager()
 try:
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives import hashes
@@ -22,15 +211,17 @@ except ImportError:
     HAS_CRYPTOGRAPHY = False
 
 
-@dataclass
 class SecurityViolation:
     """Security violation record."""
-    timestamp: float
-    violation_type: str
-    source_ip: Optional[str]
-    user_id: Optional[str]
-    details: Dict[str, Any]
-    severity: str  # low, medium, high, critical
+    def __init__(self, timestamp: float, violation_type: str, 
+                 source_ip: Optional[str] = None, user_id: Optional[str] = None,
+                 details: Optional[Dict[str, Any]] = None, severity: str = "medium"):
+        self.timestamp = timestamp
+        self.violation_type = violation_type
+        self.source_ip = source_ip
+        self.user_id = user_id
+        self.details = details or {}
+        self.severity = severity
 
 
 class InputValidator:
