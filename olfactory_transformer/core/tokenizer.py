@@ -137,6 +137,28 @@ class MoleculeTokenizer:
         if len(smiles) > 10000:  # Reasonable limit
             raise ValueError("SMILES string too long (max 10000 characters)")
         
+        # Handle empty string as special case for robustness
+        if smiles == "":
+            max_length = max_length or self.max_length
+            if add_special_tokens:
+                tokens = [self.special_tokens["cls_token"], self.special_tokens["sep_token"]]
+            else:
+                tokens = []
+            input_ids = [self.token_to_id.get(token, 0) for token in tokens]
+            attention_mask = [1] * len(input_ids)
+            
+            # Pad if necessary
+            if padding and max_length and len(input_ids) < max_length:
+                pad_length = max_length - len(input_ids)
+                pad_id = self.token_to_id[self.special_tokens["pad_token"]]
+                input_ids.extend([pad_id] * pad_length)
+                attention_mask.extend([0] * pad_length)
+            
+            return {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+            }
+        
         # Enhanced security validation
         if not self.security_validator.validate_smiles(smiles):
             raise ValueError("SMILES contains dangerous patterns or invalid format")
