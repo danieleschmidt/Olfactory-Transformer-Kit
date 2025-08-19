@@ -1,5 +1,5 @@
 {
-  "validation_timestamp": "2025-08-14T23:18:35.851758",
+  "validation_timestamp": "2025-08-19T01:07:47.163839",
   "overall_status": "FAILED",
   "test_results": {
     "Basic Functionality Tests": {
@@ -8,8 +8,8 @@
       "has_output": true
     },
     "Robustness & Error Handling": {
-      "passed": true,
-      "output_length": 1913,
+      "passed": false,
+      "output_length": 2566,
       "has_output": true
     },
     "Performance Benchmarks": {
@@ -19,24 +19,24 @@
     },
     "Production Readiness": {
       "passed": true,
-      "output_length": 1220,
+      "output_length": 1219,
       "has_output": true
     }
   },
   "code_quality": {
     "passed": true,
     "metrics": {
-      "total_files": 157,
-      "python_files": 48,
-      "total_lines": 18873,
-      "documentation_coverage": 17.45632138177032,
+      "total_files": 199,
+      "python_files": 69,
+      "total_lines": 25773,
+      "documentation_coverage": 15.771562813069215,
       "complexity_score": 0
     }
   },
   "security_analysis": {
     "passed": false,
     "analysis": {
-      "security_score": 35,
+      "security_score": 25,
       "security_features": [
         "Security modules present"
       ],
@@ -45,6 +45,7 @@
         "validate_production_readiness.py: Direct code execution",
         "basic_usage.py: Dynamic code evaluation",
         "inverse.py: Dynamic code evaluation",
+        "optimization.py: Dynamic code evaluation",
         "performance_optimization.py: Dynamic code evaluation",
         "caching.py: Unsafe deserialization",
         "optimization.py: Dynamic code evaluation"
@@ -67,8 +68,8 @@
   },
   "summary": {
     "total_tests": 4,
-    "passed_tests": 4,
-    "overall_score": 55.5,
+    "passed_tests": 3,
+    "overall_score": 45.0,
     "readiness_level": "DEVELOPMENT"
   },
   "recommendations": [
