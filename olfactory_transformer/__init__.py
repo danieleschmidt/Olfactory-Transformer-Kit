@@ -51,3 +51,29 @@ if PerceptualEvaluator is not None:
 
 if OlfactoryTrainer is not None:
     __all__.append("OlfactoryTrainer")
+
+# Enhanced features
+try:
+    from .core.enhanced_features import EnhancedOlfactorySystem
+    __all__.append("EnhancedOlfactorySystem")
+except ImportError:
+    EnhancedOlfactorySystem = None
+
+# Research modules
+try:
+    from .research.breakthrough_algorithms_2025 import BreakthroughResearchOrchestrator2025
+    __all__.append("BreakthroughResearchOrchestrator2025")
+except ImportError:
+    BreakthroughResearchOrchestrator2025 = None
+
+# Robust processing and dependency management (Generation 2)
+try:
+    from .utils.robust_processing import robust_pipeline, ValidationResult, ProcessingResult
+    from .utils.dependency_manager import dependency_manager
+    from .utils.i18n_manager import i18n_manager
+    __all__.extend(["robust_pipeline", "dependency_manager", "i18n_manager", 
+                   "ValidationResult", "ProcessingResult"])
+except ImportError:
+    robust_pipeline = None
+    dependency_manager = None
+    i18n_manager = None

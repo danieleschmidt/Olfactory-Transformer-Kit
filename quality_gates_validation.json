@@ -1,0 +1,79 @@
+{
+  "timestamp": 1755691554.6536763,
+  "overall_grade": "D",
+  "success_rate": 60.0,
+  "deployment_ready": false,
+  "publication_ready": true,
+  "gate_results": [
+    {
+      "gate_name": "Test Coverage",
+      "passed": false,
+      "score": 66.66666666666666,
+      "requirements_met": {
+        "minimum_coverage": false,
+        "all_generations_tested": false,
+        "research_validated": true,
+        "core_system_covered": false
+      },
+      "recommendations": [
+        "Increase test coverage from 66.7% to 85.0%",
+        "Add comprehensive tests for generation_1",
+        "Add comprehensive tests for core_system"
+      ]
+    },
+    {
+      "gate_name": "Performance",
+      "passed": false,
+      "score": 84.11884057971015,
+      "requirements_met": {
+        "sub_200ms_response": false,
+        "high_throughput": true,
+        "efficient_memory": true,
+        "scalable_performance": true
+      },
+      "recommendations": [
+        "Optimize response time from 230.0ms to <200ms"
+      ]
+    },
+    {
+      "gate_name": "Security",
+      "passed": true,
+      "score": 100.0,
+      "requirements_met": {
+        "zero_vulnerabilities": true,
+        "input_sanitization": true,
+        "secure_dependencies": true,
+        "data_encryption": true,
+        "api_authentication": true,
+        "secrets_protected": true
+      },
+      "recommendations": []
+    },
+    {
+      "gate_name": "Global Architecture",
+      "passed": true,
+      "score": 100.0,
+      "requirements_met": {
+        "multi_language": true,
+        "regional_ready": true,
+        "auto_scaling_enabled": true,
+        "load_balancing_ready": true,
+        "data_compliant": true
+      },
+      "recommendations": []
+    },
+    {
+      "gate_name": "Publication Readiness",
+      "passed": true,
+      "score": 100.0,
+      "requirements_met": {
+        "novel_algorithms": true,
+        "statistical_validity": true,
+        "reproducible_results": true,
+        "comprehensive_docs": true,
+        "baseline_comparisons": true
+      },
+      "recommendations": []
+    }
+  ]
+}

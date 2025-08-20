@@ -109,14 +109,50 @@ class ScentPrediction:
 
 @dataclass
 class SensorReading:
-    """Container for sensor array readings."""
+    """Container for sensor array readings with robust validation."""
     
-    timestamp: float
-    gas_sensors: Dict[str, float] = field(default_factory=dict)
+    gas_sensors: Dict[str, float]
+    timestamp: Optional[float] = None
     environmental: Dict[str, float] = field(default_factory=dict)
     spectral: Optional[List[float]] = None
     temperature: float = 20.0
     humidity: float = 50.0
+    
+    def __post_init__(self):
+        """Post-initialization validation and defaults."""
+        if self.timestamp is None:
+            import time
+            self.timestamp = time.time()
+        
+        # Validate gas sensors data
+        if not self.gas_sensors:
+            raise ValueError("Gas sensors data cannot be empty")
+        
+        # Ensure all sensor values are valid numbers
+        for sensor_name, value in self.gas_sensors.items():
+            if not isinstance(value, (int, float)) or not (-1000 <= value <= 10000):
+                raise ValueError(f"Invalid sensor value for {sensor_name}: {value}")
+        
+        # Validate environmental data if provided
+        if self.environmental:
+            for env_name, value in self.environmental.items():
+                if not isinstance(value, (int, float)) or not (-100 <= value <= 1000):
+                    raise ValueError(f"Invalid environmental value for {env_name}: {value}")
+        
+        # Validate temperature and humidity ranges
+        if not (-50 <= self.temperature <= 100):
+            raise ValueError(f"Temperature out of range: {self.temperature}")
+        
+        if not (0 <= self.humidity <= 100):
+            raise ValueError(f"Humidity out of range: {self.humidity}")
+    
+    @property
+    def sensor_types(self) -> List[str]:
+        """Get list of available sensor types."""
+        types = list(self.gas_sensors.keys())
+        if self.environmental:
+            types.extend(self.environmental.keys())
+        return types
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert reading to dictionary."""
@@ -127,4 +163,5 @@ class SensorReading:
             "spectral": self.spectral,
             "temperature": self.temperature,
             "humidity": self.humidity,
+            "sensor_types": self.sensor_types
         }
