@@ -10,6 +10,9 @@ import json
 class OlfactoryConfig:
     """Configuration class for OlfactoryTransformer model."""
     
+    # Model identification
+    model_name: str = "olfactory-base-v1"
+    
     # Model architecture
     vocab_size: int = 50000
     hidden_size: int = 1024

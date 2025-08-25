@@ -1,0 +1,356 @@
+{
+  "overall_success": false,
+  "gate_results": {
+    "Security Validation": {
+      "overall_score": 55.46052631578947,
+      "status": "FAIL",
+      "checks": {
+        "Hardcoded Secrets": {
+          "status": "PASS",
+          "score": 100,
+          "issues_found": 0,
+          "details": []
+        },
+        "SQL Injection Patterns": {
+          "status": "FAIL",
+          "score": 70,
+          "issues_found": 1,
+          "details": [
+            {
+              "file": "autonomous_quality_gates.py",
+              "issue": "String formatting in SQL",
+              "severity": "HIGH"
+            }
+          ]
+        },
+        "Path Traversal Vulnerabilities": {
+          "status": "FAIL",
+          "score": 0,
+          "issues_found": 9,
+          "details": [
+            {
+              "file": "test_robustness.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "test_robustness.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "validate_production_readiness.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "comprehensive_autonomous_test_suite.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "tests/test_security.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "tests/test_security.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "tests/test_security.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "tests/test_tokenizer.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            },
+            {
+              "file": "tests/test_tokenizer.py",
+              "issue": "Path traversal pattern",
+              "severity": "HIGH"
+            }
+          ]
+        },
+        "Input Validation": {
+          "status": "PASS",
+          "score": 73.68421052631578,
+          "files_with_validation": 70,
+          "total_files": 95,
+          "validation_coverage": "73.7%"
+        },
+        "Error Information Disclosure": {
+          "status": "WARN",
+          "score": 0,
+          "issues_found": 81,
+          "details": [
+            {
+              "file": "benchmark_performance.py",
+              "issue": "Raw exception string",
+              "severity": "MEDIUM"
+            },
+            {
+              "file": "benchmark_performance.py",
+              "issue": "Raw exception string",
+              "severity": "MEDIUM"
+            },
+            {
+              "file": "benchmark_performance.py",
+              "issue": "Raw exception string",
+              "severity": "MEDIUM"
+            },
+            {
+              "file": "comprehensive_quality_gates.py",
+              "issue": "Traceback printed",
+              "severity": "MEDIUM"
+            },
+            {
+              "file": "comprehensive_quality_gates.py",
+              "issue": "Raw exception string",
+              "severity": "MEDIUM"
+            }
+          ]
+        },
+        "Dependency Vulnerabilities": {
+          "status": "FAIL",
+          "score": 20,
+          "vulnerabilities_found": 2,
+          "details": [
+            {
+              "file": "requirements-prod.txt",
+              "vulnerability": "requests<2.25.0",
+              "severity": "HIGH"
+            },
+            {
+              "file": "requirements-prod.txt",
+              "vulnerability": "cryptography<3.2.0",
+              "severity": "HIGH"
+            }
+          ]
+        },
+        "File Permission Security": {
+          "status": "PASS",
+          "score": 100,
+          "issues_found": 0,
+          "details": []
+        },
+        "Import Security": {
+          "status": "PASS",
+          "score": 80,
+          "imports_found": 43,
+          "details": [
+            {
+              "file": "benchmark.py",
+              "import": "import os",
+              "risk": "os module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "benchmark.py",
+              "import": "import sys",
+              "risk": "sys module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "benchmark_performance.py",
+              "import": "import sys",
+              "risk": "sys module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "comprehensive_quality_gates.py",
+              "import": "import sys",
+              "risk": "sys module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "comprehensive_validation.py",
+              "import": "import os",
+              "risk": "os module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "comprehensive_validation.py",
+              "import": "import subprocess",
+              "risk": "subprocess module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "comprehensive_validation.py",
+              "import": "import sys",
+              "risk": "sys module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "run_research_validation.py",
+              "import": "import os",
+              "risk": "os module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "run_research_validation.py",
+              "import": "import sys",
+              "risk": "sys module - check usage",
+              "severity": "LOW"
+            },
+            {
+              "file": "validate_code.py",
+              "import": "import os",
+              "risk": "os module - check usage",
+              "severity": "LOW"
+            }
+          ],
+          "note": "Review usage of these imports for security"
+        }
+      },
+      "issues_found": 0,
+      "critical_issues": 0
+    },
+    "Performance Benchmarks": {
+      "overall_score": 36.46968449931413,
+      "status": "FAIL",
+      "benchmarks": {
+        "Import Performance": {
+          "status": "FAIL",
+          "score": 0,
+          "average_import_time": 0.513859212398529,
+          "total_modules_tested": 4,
+          "details": {
+            "olfactory_transformer": 2.0554306507110596,
+            "olfactory_transformer.core.tokenizer": 2.86102294921875e-06,
+            "olfactory_transformer.core.config": 1.6689300537109375e-06,
+            "olfactory_transformer.utils.dependency_isolation": 1.6689300537109375e-06
+          },
+          "execution_time": 2.0554563999176025
+        },
+        "Core Functionality": {
+          "status": "PASS",
+          "score": 100.0,
+          "operations_tested": 2,
+          "details": {
+            "tokenization": {
+              "time": 0.0010390281677246094,
+              "operations": 300,
+              "ops_per_second": 288731.3446535108
+            },
+            "config_creation": {
+              "time": 0.0015494823455810547,
+              "operations": 1000,
+              "ops_per_second": 645376.8272041853
+            }
+          },
+          "execution_time": 0.003736257553100586
+        },
+        "Memory Usage": {
+          "status": "PASS",
+          "score": 100,
+          "initial_objects": 144034,
+          "peak_objects": 144936,
+          "final_objects": 143472,
+          "cleanup_ratio": 1.623059866962306,
+          "memory_efficiency": "162.31%",
+          "execution_time": 0.15026450157165527
+        },
+        "Scalability": {
+          "status": "FAIL",
+          "score": 0,
+          "workloads_tested": [
+            1,
+            5,
+            10,
+            20,
+            50
+          ],
+          "execution_times": [
+            0.0012164115905761719,
+            0.005277156829833984,
+            0.010720968246459961,
+            0.020333051681518555,
+            0.05031442642211914
+          ],
+          "growth_factor": 10.879607871934205,
+          "scalability_grade": "Poor",
+          "execution_time": 0.09206056594848633
+        },
+        "Error Handling Overhead": {
+          "status": "FAIL",
+          "score": 0,
+          "normal_time": 0.00012111663818359375,
+          "protected_time": 0.0003800392150878906,
+          "overhead_percent": 213.77952755905514,
+          "iterations": 1000,
+          "performance_impact": "213.8% overhead",
+          "execution_time": 0.005905866622924805
+        },
+        "Optimization Effectiveness": {
+          "status": "FAIL",
+          "score": 18.818106995884772,
+          "first_call_time": 0.0013628005981445312,
+          "second_call_time": 0.0014483928680419922,
+          "speedup_factor": 0.9409053497942387,
+          "cache_effectiveness": "0.9x speedup",
+          "execution_time": 0.0075855255126953125
+        }
+      },
+      "performance_grade": "F"
+    },
+    "Code Quality Assessment": {
+      "status": "PASS",
+      "score": 95.59228650137742,
+      "documentation_files": 22,
+      "test_files": 21,
+      "total_python_files": 121,
+      "typing_coverage": "86.8%",
+      "details": {
+        "documentation_score": 100,
+        "test_score": 100,
+        "typing_score": 86.77685950413223
+      }
+    },
+    "Production Readiness": {
+      "status": "PASS",
+      "score": 100.0,
+      "essential_files": {
+        "README.md": true,
+        "requirements.txt or pyproject.toml": true,
+        "LICENSE": true,
+        "Dockerfile": true,
+        "docker-compose.yml": true
+      },
+      "config_files_found": 8,
+      "logging_configured": true,
+      "error_handling_present": true,
+      "production_readiness_percent": "100.0%"
+    },
+    "Final Validation": {
+      "status": "PASS",
+      "score": 100,
+      "smoke_test_passed": true,
+      "smoke_test_error": null,
+      "system_integration": "HEALTHY",
+      "final_validation_result": "System ready for production"
+    }
+  },
+  "summary": {
+    "total_gates": 5,
+    "passed_gates": 3,
+    "warned_gates": 0,
+    "failed_gates": 2,
+    "average_score": 59.11845730027549,
+    "overall_grade": "D",
+    "pass_rate": "60.0%"
+  },
+  "recommendations": [
+    "Address failures in Security Validation (Score: 0.0)",
+    "Address failures in Performance Benchmarks (Score: 0.0)"
+  ],
+  "production_ready": {
+    "readiness_level": "NOT_READY",
+    "critical_gates_passed": false,
+    "average_score": 59.11845730027549,
+    "recommendation": "System requires significant improvements before deployment"
+  }
+}
