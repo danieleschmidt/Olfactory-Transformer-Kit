@@ -121,6 +121,10 @@ class MoleculeTokenizer:
         
         return tokens
     
+    def tokenize(self, smiles: str) -> List[str]:
+        """Tokenize SMILES string (alias for tokenize_smiles)."""
+        return self.tokenize_smiles(smiles)
+    
     def encode(
         self, 
         smiles: str,
