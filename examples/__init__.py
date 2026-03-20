@@ -1,1 +1,0 @@
-"""Example usage of Olfactory Transformer."""
